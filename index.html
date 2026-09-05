@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HFC Coax Signal Loss Calculator</title>
+<style>
+  :root{
+    --bg:#0f172a;
+    --panel:#111827;
+    --panel2:#1f2937;
+    --text:#f8fafc;
+    --muted:#a7b0c0;
+    --accent:#38bdf8;
+    --border:#334155;
+    --good:#86efac;
+    --warn:#facc15;
+    --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:linear-gradient(180deg,#0b1220,#111827);
+    color:var(--text);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:24px}
+  h1{font-size:clamp(1.7rem,4vw,2.5rem);margin:0 0 6px}
+  .sub{color:var(--muted);margin:0 0 22px}
+  .card{
+    background:rgba(17,24,39,.96);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:18px;
+    box-shadow:0 12px 36px rgba(0,0,0,.24);
+    margin-bottom:16px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+  }
+  @media(max-width:640px){.grid{grid-template-columns:1fr}.wrap{padding:14px}}
+  label{display:block;font-weight:700;margin-bottom:7px}
+  input,select{
+    width:100%;
+    background:#0b1220;
+    color:var(--text);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 13px;
+    font-size:1rem;
+    outline:none;
+  }
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+  .row{display:flex;gap:8px}
+  .row input{flex:1}
+  .row select{width:112px}
+  .presets{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+  button{
+    border:1px solid var(--border);
+    background:var(--panel2);
+    color:var(--text);
+    border-radius:999px;
+    padding:7px 10px;
+    cursor:pointer;
+  }
+  button:hover{border-color:var(--accent)}
+  .result{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:10px;
+    margin-top:4px;
+  }
+  @media(max-width:640px){.result{grid-template-columns:1fr}}
+  .metric{
+    padding:14px;
+    background:#0b1220;
+    border:1px solid var(--border);
+    border-radius:14px;
+  }
+  .metric .k{color:var(--muted);font-size:.85rem}
+  .metric .v{font-size:1.8rem;font-weight:800;margin-top:3px}
+  .metric .u{font-size:.92rem;color:var(--muted)}
+  .status{margin-top:12px;color:var(--muted);line-height:1.45}
+  .status strong{color:var(--text)}
+  .error{color:var(--bad)}
+  .formula{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    background:#0b1220;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px;
+    overflow:auto;
+  }
+  details summary{cursor:pointer;font-weight:700}
+  .small{font-size:.9rem;color:var(--muted);line-height:1.5}
+  .source{font-size:.8rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HFC Coax Signal Loss Calculator</h1>
+  <p class="sub">Estimate coax attenuation from cable type, frequency, and cable length.</p>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label for="cable">Cable type</label>
+        <select id="cable"></select>
+      </div>
+
+      <div>
+        <label for="frequency">Frequency (MHz)</label>
+        <input id="frequency" type="number" min="1" step="0.1" value="750">
+        <div class="presets">
+          <button type="button" data-f="5">5</button>
+          <button type="button" data-f="42">42</button>
+          <button type="button" data-f="85">85</button>
+          <button type="button" data-f="204">204</button>
+          <button type="button" data-f="550">550</button>
+          <button type="button" data-f="750">750</button>
+          <button type="button" data-f="1002">1002</button>
+          <button type="button" data-f="1218">1218</button>
+        </div>
+      </div>
+
+      <div>
+        <label for="length">Cable length</label>
+        <div class="row">
+          <input id="length" type="number" min="0" step="0.1" value="250">
+          <select id="unit">
+            <option value="ft">feet</option>
+            <option value="m">meters</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label for="inputLevel">Starting level (optional, dBmV)</label>
+        <input id="inputLevel" type="number" step="0.1" placeholder="e.g. 20">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="result">
+      <div class="metric">
+        <div class="k">Cable loss</div>
+        <div class="v" id="loss">—</div>
+        <div class="u">dB</div>
+      </div>
+      <div class="metric">
+        <div class="k">Attenuation</div>
+        <div class="v" id="rate">—</div>
+        <div class="u">dB / 100 ft</div>
+      </div>
+      <div class="metric">
+        <div class="k">Ending level</div>
+        <div class="v" id="ending">—</div>
+        <div class="u">dBmV</div>
+      </div>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>How the calculator works</summary>
+      <p class="small">The attenuation tables contain manufacturer-published loss values at specific frequencies. For a frequency between two published points, the calculator linearly interpolates the loss rate, then scales it to the entered cable length.</p>
+      <div class="formula">Total loss (dB) = attenuation (dB/100 ft) × length (ft) ÷ 100</div>
+      <p class="small">The result is cable attenuation only. It does not include taps, splitters, directional couplers, connectors, splices, equalizers, amplifiers, or other plant devices.</p>
+    </details>
+  </div>
+
+  <div class="card source">
+    Reference data in this version is based primarily on CommScope foam drop-cable and P3 hardline attenuation tables at 68°F / 20°C. Actual cable loss can vary by manufacturer, construction, age, and temperature.
+  </div>
+</div>
+
+<script>
+const cableData = {
+  "RG59": {
+    label: "RG59 / Series 59 foam",
+    group: "Drop cable",
+    points: [
+      [5,0.86],[55,2.05],[83,2.45],[187,3.60],[211,3.80],
+      [250,4.10],[300,4.45],[350,4.80],[400,5.10],[450,5.40],
+      [500,5.70],[550,5.95],[600,6.20],[750,6.97],[865,7.52],[1000,8.12]
+    ]
+  },
+  "RG6": {
+    label: "RG6 / Series 6 foam",
+    group: "Drop cable",
+    points: [
+      [5,0.58],[55,1.18],[83,1.95],[187,2.85],[204,3.00],[211,3.05],
+      [250,3.30],[300,3.55],[350,3.85],[400,4.15],[450,4.40],
+      [500,4.66],[550,4.90],[600,5.10],[750,5.65],[865,6.10],
+      [1000,6.55],[1218,7.21]
+    ]
+  },
+  "RG11": {
+    label: "RG11 / Series 11 foam",
+    group: "Drop cable",
+    points: [
+      [5,0.38],[55,0.96],[83,1.18],[187,1.75],[204,1.87],[211,1.90],
+      [250,2.05],[300,2.25],[350,2.42],[400,2.60],[450,2.75],
+      [500,2.90],[550,3.04],[600,3.18],[750,3.65],[865,3.98],
+      [1000,4.35],[1218,4.92]
+    ]
+  },
+
+  "P3-500": {
+    label: '0.500" hardline',
+    group: "Hardline",
+    points: [
+      [5,0.16],[55,0.54],[85,0.68],[204,1.07],[211,1.09],
+      [250,1.20],[300,1.31],[350,1.43],[400,1.53],[450,1.63],
+      [500,1.73],[550,1.82],[600,1.91],[750,2.16],[865,2.34],
+      [1000,2.52],[1002,2.54],[1218,2.83]
+    ]
+  },
+  "P3-565": {
+    label: '0.565" hardline',
+    group: "Hardline",
+    points: [
+      [5,0.14],[55,0.47],[85,0.59],[204,0.93],[211,0.95],
+      [250,1.03],[300,1.13],[350,1.23],[400,1.32],[450,1.40],
+      [500,1.49],[550,1.56],[600,1.64],[750,1.85],[865,2.00],
+      [1002,2.17],[1218,2.42]
+    ]
+  },
+  "P3-625": {
+    label: '0.625" hardline',
+    group: "Hardline",
+    points: [
+      [5,0.13],[55,0.45],[83,0.56],[204,0.89],[211,0.92],
+      [250,1.00],[300,1.08],[350,1.18],[400,1.27],[450,1.35],
+      [500,1.43],[550,1.50],[600,1.58],[750,1.78],[865,1.93],
+      [1000,2.07],[1002,2.09],[1218,2.32]
+    ]
+  },
+  "P3-700": {
+    label: '0.700" hardline',
+    group: "Hardline",
+    points: [
+      [5,0.11],[55,0.36],[85,0.46],[204,0.73],[211,0.73],
+      [250,0.81],[300,0.90],[350,0.98],[400,1.05],[450,1.12],
+      [500,1.19],[550,1.25],[600,1.31],[750,1.49],[865,1.62],
+      [1002,1.76],[1218,1.96]
+    ]
+  },
+  "P3-750": {
+    label: '0.750" hardline',
+    group: "Hardline",
+    points: [
+      [5,0.11],[55,0.37],[83,0.46],[204,0.72],[211,0.74],
+      [250,0.81],[300,0.89],[350,0.97],[400,1.05],[450,1.12],
+      [500,1.18],[550,1.24],[600,1.31],[750,1.48],[865,1.61],
+      [1000,1.74],[1002,1.74],[1218,1.95]
+    ]
+  },
+  "P3-875": {
+    label: '0.875" hardline',
+    group: "Hardline",
+    points: [
+      [5,0.09],[55,0.33],[83,0.41],[85,0.40],[204,0.63],[211,0.66],
+      [250,0.72],[300,0.78],[350,0.84],[400,0.91],[450,0.97],
+      [500,1.03],[550,1.08],[600,1.14],[750,1.29],[865,1.41],
+      [1000,1.53],[1002,1.52],[1218,1.70]
+    ]
+  },
+  "P3-1000": {
+    label: '1.000" hardline (legacy)',
+    group: "Hardline",
+    points: [
+      [5,0.08],[55,0.31],[83,0.39],[211,0.59],[250,0.65],
+      [300,0.72],[350,0.78],[400,0.84],[450,0.90],[500,0.96],
+      [550,1.01],[600,1.06],[750,1.21],[865,1.34],[1000,1.44]
+    ]
+  }
+};
+
+const cableEl = document.getElementById("cable");
+const groups = {};
+for (const [key, item] of Object.entries(cableData)) {
+  if (!groups[item.group]) {
+    groups[item.group] = document.createElement("optgroup");
+    groups[item.group].label = item.group;
+    cableEl.appendChild(groups[item.group]);
+  }
+  const opt = document.createElement("option");
+  opt.value = key;
+  opt.textContent = item.label;
+  if (key === "RG6") opt.selected = true;
+  groups[item.group].appendChild(opt);
+}
+
+function interpolate(points, f) {
+  if (f < points[0][0] || f > points[points.length-1][0]) return null;
+
+  for (let i=0; i<points.length; i++) {
+    if (Math.abs(f - points[i][0]) < 1e-9) {
+      return {value: points[i][1], exact:true, low:points[i][0], high:points[i][0]};
+    }
+  }
+
+  for (let i=0; i<points.length-1; i++) {
+    const [f1,a1] = points[i];
+    const [f2,a2] = points[i+1];
+    if (f > f1 && f < f2) {
+      const t = (f-f1)/(f2-f1);
+      return {value:a1 + t*(a2-a1), exact:false, low:f1, high:f2};
+    }
+  }
+  return null;
+}
+
+function fmt(n, digits=2) {
+  return Number.isFinite(n) ? n.toFixed(digits) : "—";
+}
+
+function calculate() {
+  const key = cableEl.value;
+  const item = cableData[key];
+  const f = parseFloat(document.getElementById("frequency").value);
+  const len = parseFloat(document.getElementById("length").value);
+  const unit = document.getElementById("unit").value;
+  const inputLevelRaw = document.getElementById("inputLevel").value.trim();
+  const inputLevel = inputLevelRaw === "" ? null : parseFloat(inputLevelRaw);
+
+  const lossEl = document.getElementById("loss");
+  const rateEl = document.getElementById("rate");
+  const endingEl = document.getElementById("ending");
+  const statusEl = document.getElementById("status");
+
+  if (!Number.isFinite(f) || !Number.isFinite(len) || len < 0) {
+    lossEl.textContent = rateEl.textContent = endingEl.textContent = "—";
+    statusEl.innerHTML = '<span class="error">Enter a valid frequency and non-negative cable length.</span>';
+    return;
+  }
+
+  const result = interpolate(item.points, f);
+  const minF = item.points[0][0];
+  const maxF = item.points[item.points.length-1][0];
+
+  if (!result) {
+    lossEl.textContent = rateEl.textContent = endingEl.textContent = "—";
+    statusEl.innerHTML = `<span class="error">Frequency is outside the reference range for ${item.label}: ${minF}–${maxF} MHz. This calculator does not extrapolate beyond published data.</span>`;
+    return;
+  }
+
+  const lengthFt = unit === "m" ? len * 3.280839895 : len;
+  const loss = result.value * (lengthFt / 100);
+  const ending = inputLevel === null || !Number.isFinite(inputLevel) ? null : inputLevel - loss;
+
+  lossEl.textContent = fmt(loss,2);
+  rateEl.textContent = fmt(result.value,3);
+  endingEl.textContent = ending === null ? "—" : fmt(ending,2);
+
+  const method = result.exact
+    ? `Exact table point at <strong>${fmt(f,1)} MHz</strong>.`
+    : `Interpolated between <strong>${result.low} MHz</strong> and <strong>${result.high} MHz</strong>.`;
+
+  statusEl.innerHTML =
+    `<strong>${item.label}</strong> • ${fmt(lengthFt,1)} ft • ${fmt(f,1)} MHz<br>` +
+    `${method} Cable-only estimate; passive/device losses are not included.`;
+}
+
+["cable","frequency","length","unit","inputLevel"].forEach(id => {
+  document.getElementById(id).addEventListener("input", calculate);
+  document.getElementById(id).addEventListener("change", calculate);
+});
+
+document.querySelectorAll("[data-f]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.getElementById("frequency").value = btn.dataset.f;
+    calculate();
+  });
+});
+
+calculate();
+</script>
+</body>
+</html>
